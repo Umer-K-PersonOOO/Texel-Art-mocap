@@ -1,7 +1,7 @@
 import bpy
 
-# Set rendering parameters (can be ignored for GLTF export)
-bpy.context.scene.render.engine = 'BLENDER_EEVEE'
+# Set rendering parameters (update for new engine)
+bpy.context.scene.render.engine = 'BLENDER_EEVEE_NEXT'
 
 # Remove all existing objects
 bpy.ops.object.select_all(action='SELECT')
@@ -32,8 +32,6 @@ bpy.context.scene.frame_end = 50
 
 # Export the scene to GLTF
 output_path = 'blender/blender_output/animation.gltf'  # Set your export path
-bpy.ops.export_scene.gltf(filepath=output_path, export_format='GLTF_EMBEDDED')
+bpy.ops.export_scene.gltf(filepath=output_path, export_format='GLTF_SEPARATE')
 
 print("Exported animation to GLTF format")
-
-
