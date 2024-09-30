@@ -1,7 +1,7 @@
 import bpy
 
 # Set rendering parameters (update for new engine)
-bpy.context.scene.render.engine = 'BLENDER_EEVEE_NEXT'
+bpy.context.scene.render.engine = 'BLENDER_EEVEE'
 
 # Remove all existing objects
 bpy.ops.object.select_all(action='SELECT')
