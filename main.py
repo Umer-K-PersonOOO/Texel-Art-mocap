@@ -41,8 +41,8 @@ with mp_pose.Pose(min_detection_confidence=0.8, min_tracking_confidence=0.8) as 
         # If pose landmarks are detected
         if pose_results.pose_landmarks:
             landmarks = pose_results.pose_landmarks.landmark
-            for landmark in landmarks:
-                output_file.write(f"{landmark.x}, {landmark.y}, {landmark.z}, {landmark.visibility}\n")
+            for idx, landmark in enumerate(landmarks):
+                output_file.write(f"{idx}: {landmark.x}, {landmark.y}, {landmark.z}, {landmark.visibility}\n")
 
             # Draw pose landmarks on the frame
             mp_drawing.draw_landmarks(frame, pose_results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
