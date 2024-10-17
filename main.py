@@ -12,7 +12,7 @@ cap = cv2.VideoCapture(0)
 
 # Open a file to write the body coordinates
 output_file = open('body_coordinates.txt', 'w')
-
+ticks = 0
 # Initialize both pose and hands detection modules
 with mp_pose.Pose(min_detection_confidence=0.8, min_tracking_confidence=0.8) as pose, \
      mp_hands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5) as hands:
@@ -31,23 +31,25 @@ with mp_pose.Pose(min_detection_confidence=0.8, min_tracking_confidence=0.8) as 
 
         # Detect pose landmarks
         pose_results = pose.process(rgb_frame)
-
         # Detect hand landmarks
         hand_results = hands.process(rgb_frame)
 
         rgb_frame.flags.writeable = True
         frame = cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR)
-
+        output_file.write(f'Frame: {ticks} \n')
         # If pose landmarks are detected
-        if pose_results.pose_landmarks:
-            landmarks = pose_results.pose_landmarks.landmark
+        if pose_results.pose_world_landmarks:
+            landmarks = pose_results.pose_world_landmarks.landmark # Now we are using pose_world_landmarks instead of pose_landmarks because this will give us the values in meters
             for idx, landmark in enumerate(landmarks):
-                output_file.write(f"{idx}: {landmark.x}, {landmark.y}, {landmark.z}, {landmark.visibility}\n")
+                if(landmark.visibility > 0.5):
+                    output_file.write(f'{ idx}: {landmark.x}, {landmark.y}, {landmark.z}, {landmark.visibility} \n')
+                    # output_file.write(f'{ idx}: {landmark.x}, {landmark.y}, {landmark.z}, {landmark.visibility} \n')
+                    
 
             # Draw pose landmarks on the frame
             mp_drawing.draw_landmarks(frame, pose_results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
-
-        # If hand landmarks are detected
+        ticks += 1
+        # If hand landmarks are detected 
         if hand_results.multi_hand_landmarks:
             for hand_landmarks in hand_results.multi_hand_landmarks:
                 mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
