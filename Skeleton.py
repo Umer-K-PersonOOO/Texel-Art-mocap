@@ -6,7 +6,7 @@ from mathutils import Vector, Quaternion
 class Skeleton:
     def __init__(self):
         self.file = open('body_coordinates.txt', 'r')
-        self.keypoints = {}
+        self.frame_keypoints = {}
         self.relative_vectors = {}
         self.bone_hierarchy = {}
         self.frames = []
@@ -59,16 +59,16 @@ class Skeleton:
         return [(a + b) / 2 for a, b in zip(point_a, point_b)]
     
     def compute_base_of_neck(self):
-        left_shoulder = self.keypoints.get('left_shoulder')
-        right_shoulder = self.keypoints.get('right_shoulder')
+        left_shoulder = self.frame_keypoints.get('left_shoulder')
+        right_shoulder = self.frame_keypoints.get('right_shoulder')
         if left_shoulder and right_shoulder:
             return self.compute_midpoint(left_shoulder, right_shoulder)
         else:
             return None  # Handle missing data appropriately
     
     def compute_center_hip(self):
-        left_hip = self.keypoints.get('left_hip')
-        right_hip = self.keypoints.get('right_hip')
+        left_hip = self.frame_keypoints.get('left_hip')
+        right_hip = self.frame_keypoints.get('right_hip')
         if left_hip and right_hip:
             return self.compute_midpoint(left_hip, right_hip)
         else:
@@ -76,29 +76,29 @@ class Skeleton:
         
     def compute_center_of_head(self):
         # Implement as discussed earlier
-        if 'left_ear' in self.keypoints and 'right_ear' in self.keypoints:
-            return self.compute_midpoint(self.keypoints['left_ear'], self.keypoints['right_ear'])
-        elif 'left_eye' in self.keypoints and 'right_eye' in self.keypoints:
-            return self.compute_midpoint(self.keypoints['left_eye'], self.keypoints['right_eye'])
-        elif 'nose' in self.keypoints:
-            return self.keypoints['nose']
+        if 'left_ear' in self.frame_keypoints and 'right_ear' in self.frame_keypoints:
+            return self.compute_midpoint(self.frame_keypoints['left_ear'], self.frame_keypoints['right_ear'])
+        elif 'left_eye' in self.frame_keypoints and 'right_eye' in self.frame_keypoints:
+            return self.compute_midpoint(self.frame_keypoints['left_eye'], self.frame_keypoints['right_eye'])
+        elif 'nose' in self.frame_keypoints:
+            return self.frame_keypoints['nose']
         else:
             return None
         
-    def update_keypoints(self, keypoints):
-        # Convert keypoints to Blender coordinate system
-        self.keypoints = {k: self.convert_coords(v) for k, v in keypoints.items()}
-        # Compute intermediate keypoints
+    def update_calculated_frame_keypoints(self, frame_keypoints):
+        # Convert frame_keypoints to Blender coordinate system
+        self.frame_keypoints = {k: self.convert_coords(v) for k, v in frame_keypoints.items()}
+        # Compute intermediate frame_keypoints
         base_of_neck = self.compute_base_of_neck()
         if base_of_neck:
-            self.keypoints['base_of_neck'] = base_of_neck
+            self.frame_keypoints['base_of_neck'] = base_of_neck
         center_hip = self.compute_center_hip()
         if center_hip:
-            self.keypoints['center_hip'] = center_hip
+            self.frame_keypoints['center_hip'] = center_hip
         center_of_head = self.compute_center_of_head()
         if center_of_head:
-            self.keypoints['center_of_head'] = center_of_head
-        # Keypoints are now updated with computed points
+            self.frame_keypoints['center_of_head'] = center_of_head
+        # frame_keypoints are now updated with computed points
         
     def define_bone_hierarchy(self):
         # Define parent-child relationships
@@ -140,13 +140,14 @@ class Skeleton:
             # Add other mappings as needed
         }
         
+    # Prints for debugging
     def compute_relative_vectors(self):
         self.relative_vectors = {}
         for parent, children in self.bone_hierarchy.items():
-            parent_coords = self.keypoints.get(parent)
+            parent_coords = self.frame_keypoints.get(parent)
             if parent_coords:
                 for child in children:
-                    child_coords = self.keypoints.get(child)
+                    child_coords = self.frame_keypoints.get(child)
                     if child_coords:
                         # Compute vector from parent to child
                         vector = np.subtract(child_coords, parent_coords)
@@ -162,6 +163,37 @@ class Skeleton:
         rotation_quat = rest_vec.rotation_difference(target_vec)
         return rotation_quat
     
+    
+    def process_frame(self):
+        line = self.file.readline()
+        frame_count = 0
+        if(not line or line.strip() != 'Frame: 0'):
+            print("Error: File in incorrect format.")
+            return None
+        while line:
+            if (line.startswith("Frame: ")):
+                # Finish working on frame
+                
+                self.update_calculated_frame_keypoints(self.frame_keypoints)
+                self.compute_relative_vectors()
+                # Here, we would process frame 
+                
+                # Clean up for next frame
+                self.frame_keypoints = {}
+                self.relative_vectors = {}
+                frame_count += 1
+            else:
+                params = line.split(", ")
+                index = int(params[0])
+                normal_vector = (float(params[1]), float(params[2]), float(params[3]))
+                self.frame_keypoints[self.index_mapping[index]] = normal_vector
+                
+                
+            line = self.file.readline()
+                
+            
+        
+    # For blender specifically:
     def apply_rotations_to_bones(self, armature, frame_number):
         pose_bones = armature.pose.bones
         for (parent, child), target_vector in self.relative_vectors.items():
@@ -185,16 +217,4 @@ class Skeleton:
             else:
                 print(f"Bone {bone_name} not found in armature.")
         
-    def process_frame(self):
-        '''Yet to be implemented'''
-        # # Update keypoints for the current frame
-        # self.update_keypoints(frame_data['keypoints'])
-        # # Compute relative vectors
-        # self.compute_relative_vectors()
-        # # Store the processed frame data
-        # frame_entry = {
-        #     'keypoints': self.keypoints.copy(),
-        #     'relative_vectors': self.relative_vectors.copy()
-        # }
-        # self.frames.append(frame_entry)
         

@@ -42,7 +42,7 @@ with mp_pose.Pose(min_detection_confidence=0.8, min_tracking_confidence=0.8) as 
             landmarks = pose_results.pose_world_landmarks.landmark # Now we are using pose_world_landmarks instead of pose_landmarks because this will give us the values in meters
             for idx, landmark in enumerate(landmarks):
                 if(landmark.visibility > 0.5):
-                    output_file.write(f'{ idx}: {landmark.x}, {landmark.y}, {landmark.z}, {landmark.visibility} \n')
+                    output_file.write(f'{ idx}, {landmark.x}, {landmark.y}, {landmark.z}, {landmark.visibility} \n')
                     # output_file.write(f'{ idx}: {landmark.x}, {landmark.y}, {landmark.z}, {landmark.visibility} \n')
                     
 
