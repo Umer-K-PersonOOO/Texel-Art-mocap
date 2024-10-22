@@ -1,5 +1,6 @@
-import cv2
+
 import mediapipe as mp
+import cv2
 import numpy as np
 
 # Initialize MediaPipe solutions for drawing, pose, and hands

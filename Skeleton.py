@@ -47,6 +47,8 @@ class Skeleton:
             32: 'right_foot_index'
         }
         
+        self.define_bone_hierarchy()   
+        
     def convert_coords(self, coords):
         x, y, z = coords
         blender_x = x
@@ -142,11 +144,14 @@ class Skeleton:
         
     # Prints for debugging
     def compute_relative_vectors(self):
-        self.relative_vectors = {}
+        #self.relative_vectors = {}
         for parent, children in self.bone_hierarchy.items():
+            print(parent)
+            print(children)
             parent_coords = self.frame_keypoints.get(parent)
             if parent_coords:
                 for child in children:
+                    print(child)
                     child_coords = self.frame_keypoints.get(child)
                     if child_coords:
                         # Compute vector from parent to child
@@ -165,11 +170,14 @@ class Skeleton:
     
     
     def process_frame(self):
+        print("f")
         line = self.file.readline()
+        print(line)
         frame_count = 0
         if(not line or line.strip() != 'Frame: 0'):
             print("Error: File in incorrect format.")
             return None
+        line = self.file.readline()
         while line:
             if (line.startswith("Frame: ")):
                 # Finish working on frame
@@ -177,11 +185,12 @@ class Skeleton:
                 self.update_calculated_frame_keypoints(self.frame_keypoints)
                 self.compute_relative_vectors()
                 # Here, we would process frame 
-                
+                print(self.frame_keypoints, self.relative_vectors)
                 # Clean up for next frame
                 self.frame_keypoints = {}
                 self.relative_vectors = {}
                 frame_count += 1
+                return None 
             else:
                 params = line.split(", ")
                 index = int(params[0])
@@ -217,4 +226,5 @@ class Skeleton:
             else:
                 print(f"Bone {bone_name} not found in armature.")
         
-        
+hi = Skeleton()    
+hi.process_frame()
