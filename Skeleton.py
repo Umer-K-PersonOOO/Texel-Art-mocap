@@ -1,6 +1,6 @@
 import numpy as np
 from mathutils import Vector, Quaternion
-
+import cv2 
 
 
 class Skeleton:
@@ -54,7 +54,7 @@ class Skeleton:
         blender_x = x
         blender_y = -z  # Invert Z for Blender's Y
         blender_z = y
-        return (blender_x, blender_y, blender_z)
+        return (x, y, z)
         
         
     def compute_midpoint(self, point_a, point_b):
@@ -146,21 +146,18 @@ class Skeleton:
     def compute_relative_vectors(self):
         #self.relative_vectors = {}
         for parent, children in self.bone_hierarchy.items():
-            print(parent)
-            print(children)
             parent_coords = self.frame_keypoints.get(parent)
             if parent_coords:
                 for child in children:
-                    print(child)
                     child_coords = self.frame_keypoints.get(child)
                     if child_coords:
                         # Compute vector from parent to child
                         vector = np.subtract(child_coords, parent_coords)
                         self.relative_vectors[(parent, child)] = vector
-                    else:
-                        print(f"Child keypoint {child} not found in current frame.")
-            else:
-                print(f"Parent keypoint {parent} not found in current frame.")
+            #         else:
+            #             print(f"Child keypoint {child} not found in current frame.")
+            # else:
+            #     print(f"Parent keypoint {parent} not found in current frame.")
         
     def compute_rotation_between_vectors(self, rest_vector, target_vector):
         rest_vec = Vector(rest_vector).normalized()
@@ -170,9 +167,7 @@ class Skeleton:
     
     
     def process_frame(self):
-        print("f")
         line = self.file.readline()
-        print(line)
         frame_count = 0
         if(not line or line.strip() != 'Frame: 0'):
             print("Error: File in incorrect format.")
@@ -185,12 +180,14 @@ class Skeleton:
                 self.update_calculated_frame_keypoints(self.frame_keypoints)
                 self.compute_relative_vectors()
                 # Here, we would process frame 
-                print(self.frame_keypoints, self.relative_vectors)
+                print(self.frame_keypoints)
+                self.visualize_frame() 
                 # Clean up for next frame
                 self.frame_keypoints = {}
                 self.relative_vectors = {}
                 frame_count += 1
-                return None 
+                print(frame_count)
+                # return None 
             else:
                 params = line.split(", ")
                 index = int(params[0])
@@ -225,6 +222,35 @@ class Skeleton:
                 bone.keyframe_insert(data_path="rotation_quaternion", frame=frame_number)
             else:
                 print(f"Bone {bone_name} not found in armature.")
+                
+    def visualize_frame(self):
+        # Set frame dimensions
+        frame_width, frame_height = 640, 480  # Adjust as needed
+        frame = np.zeros((frame_height, frame_width, 3), dtype=np.uint8)  # Create blank frame
+
+        # Draw keypoints
+        for keypoint, coords in self.frame_keypoints.items():
+            x, y, _ = self.convert_coords(coords)
+            x = int(x * frame_width / 2 + frame_width / 2)
+            y = int(y * frame_height / 2 + frame_height / 2)
+            cv2.circle(frame, (x, y), 5, (0, 255, 0), -1)  # Draw green circles for keypoints
+
+        # Draw vectors
+        for (parent, child), vector in self.relative_vectors.items():
+            if parent in self.frame_keypoints and child in self.frame_keypoints:
+                parent_coords = self.frame_keypoints[parent]
+                child_coords = self.frame_keypoints[child]
+
+                x1, y1, _ = self.convert_coords(parent_coords)
+                x2, y2, _ = self.convert_coords(child_coords)
+                x1, y1 = int(x1 * frame_width / 2 + frame_width / 2), int(y1 * frame_height / 2 + frame_height / 2)
+                x2, y2 = int(x2 * frame_width / 2 + frame_width / 2), int(y2 * frame_height / 2 + frame_height / 2)
+
+                cv2.line(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)  # Draw blue lines for vectors
+
+        # Display the frame
+        cv2.imshow('Skeleton Visualization', frame)
+        cv2.waitKey(60)  # Display each frame briefly
         
 hi = Skeleton()    
 hi.process_frame()
