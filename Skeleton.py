@@ -1,7 +1,6 @@
 import numpy as np
 from mathutils import Vector, Quaternion
-import cv2 
-
+import cv2
 
 class Skeleton:
     def __init__(self):
@@ -46,16 +45,24 @@ class Skeleton:
             31: 'left_foot_index',
             32: 'right_foot_index'
         }
+
+        # Define frame dimensions for the visualization
+        self.frame_width = 640
+        self.frame_height = 480
+
+        # Initialize video writer for saving the video
+        self.video_writer = cv2.VideoWriter(
+            'skeleton_visualization.mp4',                  # Output file name
+            cv2.VideoWriter_fourcc(*'mp4v'),               # Codec
+            30,                                            # Frame rate
+            (self.frame_width, self.frame_height)          # Frame dimensions
+        )
         
-        self.define_bone_hierarchy()   
+        self.define_bone_hierarchy()
         
     def convert_coords(self, coords):
         x, y, z = coords
-        blender_x = x
-        blender_y = -z  # Invert Z for Blender's Y
-        blender_z = y
         return (x, y, z)
-        
         
     def compute_midpoint(self, point_a, point_b):
         return [(a + b) / 2 for a, b in zip(point_a, point_b)]
@@ -77,7 +84,6 @@ class Skeleton:
             return None
         
     def compute_center_of_head(self):
-        # Implement as discussed earlier
         if 'left_ear' in self.frame_keypoints and 'right_ear' in self.frame_keypoints:
             return self.compute_midpoint(self.frame_keypoints['left_ear'], self.frame_keypoints['right_ear'])
         elif 'left_eye' in self.frame_keypoints and 'right_eye' in self.frame_keypoints:
@@ -88,9 +94,7 @@ class Skeleton:
             return None
         
     def update_calculated_frame_keypoints(self, frame_keypoints):
-        # Convert frame_keypoints to Blender coordinate system
         self.frame_keypoints = {k: self.convert_coords(v) for k, v in frame_keypoints.items()}
-        # Compute intermediate frame_keypoints
         base_of_neck = self.compute_base_of_neck()
         if base_of_neck:
             self.frame_keypoints['base_of_neck'] = base_of_neck
@@ -100,10 +104,8 @@ class Skeleton:
         center_of_head = self.compute_center_of_head()
         if center_of_head:
             self.frame_keypoints['center_of_head'] = center_of_head
-        # frame_keypoints are now updated with computed points
         
     def define_bone_hierarchy(self):
-        # Define parent-child relationships
         self.bone_hierarchy = {
             'center_hip': ['base_of_neck', 'left_hip', 'right_hip'],
             'base_of_neck': ['center_of_head', 'left_shoulder', 'right_shoulder'],
@@ -117,10 +119,8 @@ class Skeleton:
             'right_hip': ['right_knee'],
             'right_knee': ['right_ankle'],
             'right_ankle': ['right_foot_index'],
-            # Add other bones as needed
         }
         
-        # Bone mapping to the armature bones in Blender
         self.bone_mapping = {
             'center_hip': 'mixamorig:Hips',
             'base_of_neck': 'mixamorig:Neck',
@@ -139,25 +139,17 @@ class Skeleton:
             'right_knee': 'mixamorig:RightLeg',
             'right_ankle': 'mixamorig:RightFoot',
             'right_foot_index': 'mixamorig:RightToeBase',
-            # Add other mappings as needed
         }
         
-    # Prints for debugging
     def compute_relative_vectors(self):
-        #self.relative_vectors = {}
         for parent, children in self.bone_hierarchy.items():
             parent_coords = self.frame_keypoints.get(parent)
             if parent_coords:
                 for child in children:
                     child_coords = self.frame_keypoints.get(child)
                     if child_coords:
-                        # Compute vector from parent to child
                         vector = np.subtract(child_coords, parent_coords)
                         self.relative_vectors[(parent, child)] = vector
-            #         else:
-            #             print(f"Child keypoint {child} not found in current frame.")
-            # else:
-            #     print(f"Parent keypoint {parent} not found in current frame.")
         
     def compute_rotation_between_vectors(self, rest_vector, target_vector):
         rest_vec = Vector(rest_vector).normalized()
@@ -165,92 +157,83 @@ class Skeleton:
         rotation_quat = rest_vec.rotation_difference(target_vec)
         return rotation_quat
     
+    def create_skeleton_with_rotations(self):
+        positions = {'center_hip': (self.frame_width // 2, self.frame_height // 2)}
+
+        for parent, children in self.bone_hierarchy.items():
+            if parent in positions:
+                parent_pos = Vector((positions[parent][0], positions[parent][1], 0))
+
+                for child in children:
+                    if (parent, child) in self.relative_vectors:
+                        vector = self.relative_vectors[(parent, child)]
+                        rotation_quat = self.compute_rotation_between_vectors((1, 0, 0), vector)
+
+                        unit_vector = Vector((1, 0, 0))
+                        rotated_vector = rotation_quat @ unit_vector
+
+                        child_pos = parent_pos + rotated_vector * 100
+                        positions[child] = (int(child_pos.x), int(child_pos.y))
+
+        return positions
     
     def process_frame(self):
         line = self.file.readline()
         frame_count = 0
-        if(not line or line.strip() != 'Frame: 0'):
+        if not line or line.strip() != 'Frame: 0':
             print("Error: File in incorrect format.")
             return None
         line = self.file.readline()
         while line:
-            if (line.startswith("Frame: ")):
-                # Finish working on frame
-                
+            if line.startswith("Frame: "):
                 self.update_calculated_frame_keypoints(self.frame_keypoints)
                 self.compute_relative_vectors()
-                # Here, we would process frame 
-                print(self.frame_keypoints)
-                self.visualize_frame() 
-                # Clean up for next frame
+                self.visualize_frame()
                 self.frame_keypoints = {}
                 self.relative_vectors = {}
                 frame_count += 1
-                print(frame_count)
-                # return None 
             else:
                 params = line.split(", ")
                 index = int(params[0])
                 normal_vector = (float(params[1]), float(params[2]), float(params[3]))
                 self.frame_keypoints[self.index_mapping[index]] = normal_vector
                 
-                
             line = self.file.readline()
-                
-            
-        
-    # For blender specifically:
-    def apply_rotations_to_bones(self, armature, frame_number):
-        pose_bones = armature.pose.bones
-        for (parent, child), target_vector in self.relative_vectors.items():
-            bone_name = self.bone_mapping.get(child)
-            if bone_name and bone_name in pose_bones:
-                bone = pose_bones[bone_name]
-                
-                # Get the rest pose vector of the bone
-                rest_bone = armature.data.bones[bone_name]
-                rest_head = Vector(rest_bone.head_local)
-                rest_tail = Vector(rest_bone.tail_local)
-                rest_vector = rest_tail - rest_head
-                
-                # Compute the rotation
-                rotation_quat = self.compute_rotation_between_vectors(rest_vector, target_vector)
-                
-                # Apply the rotation
-                bone.rotation_mode = 'QUATERNION'
-                bone.rotation_quaternion = rotation_quat @ bone.rotation_quaternion
-                bone.keyframe_insert(data_path="rotation_quaternion", frame=frame_number)
-            else:
-                print(f"Bone {bone_name} not found in armature.")
-                
+    
     def visualize_frame(self):
-        # Set frame dimensions
-        frame_width, frame_height = 640, 480  # Adjust as needed
-        frame = np.zeros((frame_height, frame_width, 3), dtype=np.uint8)  # Create blank frame
+        frame = np.zeros((self.frame_height, self.frame_width, 3), dtype=np.uint8)
 
-        # Draw keypoints
         for keypoint, coords in self.frame_keypoints.items():
             x, y, _ = self.convert_coords(coords)
-            x = int(x * frame_width / 2 + frame_width / 2)
-            y = int(y * frame_height / 2 + frame_height / 2)
-            cv2.circle(frame, (x, y), 5, (0, 255, 0), -1)  # Draw green circles for keypoints
+            x = int(x * self.frame_width / 2 + self.frame_width / 2)
+            y = int(y * self.frame_height / 2 + self.frame_height / 2)
+            cv2.circle(frame, (x, y), 5, (0, 255, 0), -1)
 
-        # Draw vectors
         for (parent, child), vector in self.relative_vectors.items():
             if parent in self.frame_keypoints and child in self.frame_keypoints:
                 parent_coords = self.frame_keypoints[parent]
                 child_coords = self.frame_keypoints[child]
-
                 x1, y1, _ = self.convert_coords(parent_coords)
                 x2, y2, _ = self.convert_coords(child_coords)
-                x1, y1 = int(x1 * frame_width / 2 + frame_width / 2), int(y1 * frame_height / 2 + frame_height / 2)
-                x2, y2 = int(x2 * frame_width / 2 + frame_width / 2), int(y2 * frame_height / 2 + frame_height / 2)
+                x1, y1 = int(x1 * self.frame_width / 2 + self.frame_width / 2), int(y1 * self.frame_height / 2 + self.frame_height / 2)
+                x2, y2 = int(x2 * self.frame_width / 2 + self.frame_width / 2), int(y2 * self.frame_height / 2 + self.frame_height / 2)
+                cv2.arrowedLine(frame, (x1, y1), (x2, y2), (255, 0, 0), 2, tipLength=0.3)
 
-                cv2.line(frame, (x1, y1), (x2, y2), (255, 0, 0), 2)  # Draw blue lines for vectors
+        rotated_positions = self.create_skeleton_with_rotations()
 
-        # Display the frame
-        cv2.imshow('Skeleton Visualization', frame)
-        cv2.waitKey(60)  # Display each frame briefly
-        
-hi = Skeleton()    
+        for parent, children in self.bone_hierarchy.items():
+            if parent in rotated_positions:
+                parent_x, parent_y = rotated_positions[parent]
+
+                for child in children:
+                    if child in rotated_positions:
+                        child_x, child_y = rotated_positions[child]
+                        cv2.arrowedLine(frame, (parent_x, parent_y), (child_x, child_y), (255, 105, 180), 2, tipLength=0.3)
+
+        cv2.imshow('Skeleton Visualization (Absolute, Relative, and Rotations)', frame)
+        cv2.waitKey(60)
+        self.video_writer.write(frame)
+
+
+hi = Skeleton()
 hi.process_frame()
