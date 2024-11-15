@@ -1,6 +1,6 @@
+import bpy
 import numpy as np
 from mathutils import Vector, Quaternion
-import cv2
 
 class Skeleton:
     def __init__(self):
@@ -45,19 +45,6 @@ class Skeleton:
             31: 'left_foot_index',
             32: 'right_foot_index'
         }
-
-        # Define frame dimensions for the visualization
-        self.frame_width = 640
-        self.frame_height = 480
-
-        # Initialize video writer for saving the video
-        self.video_writer = cv2.VideoWriter(
-            'skeleton_visualization.mp4',                  # Output file name
-            cv2.VideoWriter_fourcc(*'mp4v'),               # Codec
-            30,                                            # Frame rate
-            (self.frame_width, self.frame_height)          # Frame dimensions
-        )
-        
         self.define_bone_hierarchy()
         
     def convert_coords(self, coords):
@@ -192,21 +179,16 @@ class Skeleton:
     
     def process_frame(self):
         line = self.file.readline()
-        frame_count = 0
-        if not line or line.strip() != 'Frame: 0':
-            print("Error: File in incorrect format.")
-            return None
-        line = self.file.readline()
         while line:
             if line.startswith("Frame: "):
                 self.update_calculated_frame_keypoints(self.frame_keypoints)
                 self.compute_relative_vectors()
-                self.visualize_frame()
                 # Example use of the formatted output for Blender
                 blender_data = self.format_for_blender()
                 self.frame_keypoints = {}
                 self.relative_vectors = {}
-                frame_count += 1
+                
+                return blender_data
             else:
                 params = line.split(", ")
                 index = int(params[0])
@@ -214,41 +196,89 @@ class Skeleton:
                 self.frame_keypoints[self.index_mapping[index]] = normal_vector
                 
             line = self.file.readline()
+        return None
     
-    def visualize_frame(self):
-        frame = np.zeros((self.frame_height, self.frame_width, 3), dtype=np.uint8)
 
-        for keypoint, coords in self.frame_keypoints.items():
-            x, y, _ = self.convert_coords(coords)
-            x = int(x * self.frame_width / 2 + self.frame_width / 2)
-            y = int(y * self.frame_height / 2 + self.frame_height / 2)
-            cv2.circle(frame, (x, y), 5, (0, 255, 0), -1)
+class BlenderAnimator:
+    def __init__(self, fbx_file_path, output_path):
+        # Load the .fbx file into Blender
+        bpy.ops.import_scene.fbx(filepath=fbx_file_path)
+        self.output_path = output_path
+        self.armature = bpy.data.objects['Armature']  # Assuming the armature name is 'Armature'
+        print("Armature: ", self.armature)
+        for bone in self.armature.pose.bones:
+            # print("Bone: ", bone)
+            print("Bone name: ", bone.name)
+        self.skeleton = Skeleton()
+        self.remove = set()
+        
+        
+    def animate_skeleton(self):
+        # Process each frame and animate accordingly
+        blender_data = self.skeleton.process_frame()
+        
+        frame_number = 0
+        while blender_data:
+            
+            bpy.context.scene.frame_set(frame_number)
+            print("Frame: ", frame_number)
+            
+            for bone_data in blender_data:
+                if frame_number == 0:
+                    print("Bone: ", bone_data['bone_name'])
+                bone_name = bone_data['bone_name']
+                rotation = bone_data['rotation']
+                self.remove.add(bone_name)
+                if bone_name in self.armature.pose.bones:
+                    pose_bone = self.armature.pose.bones[bone_name]
+                    quat = Quaternion(rotation)
+                    pose_bone.rotation_quaternion = quat
+                    pose_bone.keyframe_insert(data_path="rotation_quaternion", frame=frame_number)
+            
+            frame_number += 1
+            blender_data = self.skeleton.process_frame()
+        print(self.remove)
+        
+        # Trial to test if api works
+        # bpy.context.scene.frame_start = 1
+        # bpy.context.scene.frame_end = 100
 
-        for (parent, child), vector in self.relative_vectors.items():
-            if parent in self.frame_keypoints and child in self.frame_keypoints:
-                parent_coords = self.frame_keypoints[parent]
-                child_coords = self.frame_keypoints[child]
-                x1, y1, _ = self.convert_coords(parent_coords)
-                x2, y2, _ = self.convert_coords(child_coords)
-                x1, y1 = int(x1 * self.frame_width / 2 + self.frame_width / 2), int(y1 * self.frame_height / 2 + self.frame_height / 2)
-                x2, y2 = int(x2 * self.frame_width / 2 + self.frame_width / 2), int(y2 * self.frame_height / 2 + self.frame_height / 2)
-                cv2.arrowedLine(frame, (x1, y1), (x2, y2), (255, 0, 0), 2, tipLength=0.3)
+        # # Access the armature object by name
+        # armature = bpy.data.objects['Armature']
 
-        rotated_positions = self.create_skeleton_with_rotations()
+        # # Enter Pose Mode to manipulate bones
+        # bpy.context.view_layer.objects.active = armature
+        # bpy.ops.object.mode_set(mode='POSE')
 
-        for parent, children in self.bone_hierarchy.items():
-            if parent in rotated_positions:
-                parent_x, parent_y = rotated_positions[parent]
+        # # Access the specific bone by name
+        # bone_name = 'mixamorig:Hips'  # Change to your bone's name
+        # bone = armature.pose.bones[bone_name]
 
-                for child in children:
-                    if child in rotated_positions:
-                        child_x, child_y = rotated_positions[child]
-                        cv2.arrowedLine(frame, (parent_x, parent_y), (child_x, child_y), (255, 105, 180), 2, tipLength=0.3)
+        # # Set the frame range and translation distance
+        # frame_start = 1
+        # frame_end = 100
+        # translation_distance = 150
 
-        cv2.imshow('Skeleton Visualization (Absolute, Relative, and Rotations)', frame)
-        cv2.waitKey(60)
-        self.video_writer.write(frame)
+        # # Loop over frames and set keyframes for location
+        # for frame in range(frame_start, frame_end + 1):
+        #     # Set the current frame
+        #     bpy.context.scene.frame_set(frame)
+            
+        #     # Calculate the translation distance for this frame
+        #     distance = translation_distance * (frame - frame_start) / (frame_end - frame_start)
+            
+        #     # Set the bone's location (translating along the X-axis; adjust if needed)
+        #     bone.location = (distance, 0, 0)
+            
+        #     # Insert a keyframe for the bone's location
+        #     bone.keyframe_insert(data_path="location", index=-1)
+            
+        
+        bpy.ops.export_scene.fbx(filepath=self.output_path)
 
-if __name__ == "__main__":
-    hi = Skeleton()
-    hi.process_frame()
+
+# Usage example
+fbx_file_path = "/home/umerkhan/Desktop/code/texel/Texel-Art-mocap/blender/Remy.fbx" # Hard coded path to the .fbx file
+fbx_output_path = "/home/umerkhan/Desktop/code/texel/Texel-Art-mocap/blender/RemyCompleted.fbx"
+animator = BlenderAnimator(fbx_file_path, fbx_output_path)
+animator.animate_skeleton()
