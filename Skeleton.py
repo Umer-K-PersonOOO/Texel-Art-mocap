@@ -168,12 +168,30 @@ class Skeleton:
                     if (parent, child) in self.relative_vectors:
                         vector = self.relative_vectors[(parent, child)]
                         rotation_quat = self.compute_rotation_between_vectors((1, 0, 0), vector)
-
+                        if parent == 'left_shoulder' and child == 'left_elbow':
+                            print(f"Rotation quaternion between {parent} and {child}: {rotation_quat}")
+                        if parent == 'right_shoulder' and child == 'right_elbow':
+                            print(f"Rotation quaternion between {parent} and {child}: {rotation_quat}")
                         unit_vector = Vector((1, 0, 0))
                         rotated_vector = rotation_quat @ unit_vector
 
                         child_pos = parent_pos + rotated_vector * 100
                         positions[child] = (int(child_pos.x), int(child_pos.y))
+        
+        # positions = {'left_shoulder': (self.frame_width // 2, self.frame_height // 2)}
+        # for parent, children in self.bone_hierarchy.items():
+        #     if parent == 'left_shoulder' and parent in positions:
+        #         parent_pos = Vector((positions[parent][0], positions[parent][1], 0))
+
+        #         for child in children:
+        #             if (parent, child) in self.relative_vectors:
+        #                 vector = self.relative_vectors[(parent, child)]
+        #                 rotation_quat = self.compute_rotation_between_vectors((1, 0, 0), vector)
+        #                 unit_vector = Vector((1, 0, 0))
+        #                 rotated_vector = rotation_quat @ unit_vector
+
+        #                 child_pos = parent_pos + rotated_vector * 100
+        #                 positions[child] = (int(child_pos.x), int(child_pos.y))
 
         return positions
     

@@ -49,6 +49,7 @@ class Skeleton:
         
     def convert_coords(self, coords):
         x, y, z = coords
+        return (x, -z, y)
         return (x, y, z)
         
     def compute_midpoint(self, point_a, point_b):
@@ -81,7 +82,7 @@ class Skeleton:
             return None
         
     def update_calculated_frame_keypoints(self, frame_keypoints):
-        self.frame_keypoints = {k: self.convert_coords(v) for k, v in frame_keypoints.items()}
+        # self.frame_keypoints = {k: self.convert_coords(v) for k, v in frame_keypoints.items()}
         base_of_neck = self.compute_base_of_neck()
         if base_of_neck:
             self.frame_keypoints['base_of_neck'] = base_of_neck
@@ -168,8 +169,13 @@ class Skeleton:
         formatted_data = []
         for (parent, child), vector in self.relative_vectors.items():
             if parent in self.frame_keypoints and child in self.frame_keypoints:
-                rest_vector = (1, 0, 0)  # Assuming rest pose is along the x-axis
+                rest_vector = (0, 0, -1)  # Assuming rest pose is along the y-axis
+                # rest_vector = (1, 0, 0)  # Assuming rest pose is along the x-axis
                 rotation_quat = self.compute_rotation_between_vectors(rest_vector, vector)
+                # if parent == 'left_shoulder' and child == 'left_elbow':
+                #     print(f"Rotation quaternion between {parent} and {child}: {rotation_quat}")
+                # if parent == 'right_shoulder' and child == 'right_elbow':
+                #     print(f"Rotation quaternion between {parent} and {child}: {rotation_quat}")
                 bone_name = self.bone_mapping.get(child, child)
                 formatted_data.append({
                     'bone_name': bone_name,
@@ -193,7 +199,8 @@ class Skeleton:
                 params = line.split(", ")
                 index = int(params[0])
                 normal_vector = (float(params[1]), float(params[2]), float(params[3]))
-                self.frame_keypoints[self.index_mapping[index]] = normal_vector
+                blender_vector = self.convert_coords(normal_vector)
+                self.frame_keypoints[self.index_mapping[index]] = blender_vector
                 
             line = self.file.readline()
         return None
@@ -205,31 +212,45 @@ class BlenderAnimator:
         bpy.ops.import_scene.fbx(filepath=fbx_file_path)
         self.output_path = output_path
         self.armature = bpy.data.objects['Armature']  # Assuming the armature name is 'Armature'
-        print("Armature: ", self.armature)
-        for bone in self.armature.pose.bones:
+        # for bone in self.armature.pose.bones:
             # print("Bone: ", bone)
-            print("Bone name: ", bone.name)
+            # print("Bone name init: ", bone.name)
         self.skeleton = Skeleton()
         self.remove = set()
         
+    def apply_global_rotation(self, bone, global_quat, armature, frame):
+        """
+        Apply a global rotation to a bone by converting it to local space.
+        """
+        # Convert global quaternion to local space
+        bone_quat_local = (
+            armature.matrix_world.to_quaternion().inverted() 
+            @ global_quat 
+            @ armature.matrix_world.to_quaternion()
+        )
         
+        # Apply the local quaternion to the bone
+        bone.rotation_quaternion = bone_quat_local
+        bone.keyframe_insert(data_path="rotation_quaternion", frame=frame)
+        print(f"Frame {frame}: Global Quaternion {global_quat}, Local Quaternion {bone_quat_local}")
+
+
     def animate_skeleton(self):
         # Process each frame and animate accordingly
         blender_data = self.skeleton.process_frame()
-        
         frame_number = 0
         while blender_data:
             
             bpy.context.scene.frame_set(frame_number)
-            print("Frame: ", frame_number)
+            # print("Frame: ", frame_number)
             
-            for bone_data in blender_data:
-                if frame_number == 0:
-                    print("Bone: ", bone_data['bone_name'])
+            for bone_data in blender_data :
+                # if frame_number == 0:
+                    # print("Bone: ", bone_data['bone_name'])
                 bone_name = bone_data['bone_name']
                 rotation = bone_data['rotation']
                 self.remove.add(bone_name)
-                if bone_name in self.armature.pose.bones:
+                if bone_name in self.armature.pose.bones: #and bone_name == 'mixamorig:RightArm' or bone_name == 'mixamorig:RightForeArm':
                     pose_bone = self.armature.pose.bones[bone_name]
                     quat = Quaternion(rotation)
                     pose_bone.rotation_quaternion = quat
@@ -239,9 +260,10 @@ class BlenderAnimator:
             blender_data = self.skeleton.process_frame()
         print(self.remove)
         
-        # Trial to test if api works
+
+        # Set the frame range
         # bpy.context.scene.frame_start = 1
-        # bpy.context.scene.frame_end = 100
+        # bpy.context.scene.frame_end = 300  # Adjust total frames as needed
 
         # # Access the armature object by name
         # armature = bpy.data.objects['Armature']
@@ -251,34 +273,48 @@ class BlenderAnimator:
         # bpy.ops.object.mode_set(mode='POSE')
 
         # # Access the specific bone by name
-        # bone_name = 'mixamorig:Hips'  # Change to your bone's name
+        # bone_name = 'mixamorig:RightArm'  # Change to your bone's name
         # bone = armature.pose.bones[bone_name]
 
-        # # Set the frame range and translation distance
-        # frame_start = 1
-        # frame_end = 100
-        # translation_distance = 150
+        # # Total frames for the animation
+        # total_frames = bpy.context.scene.frame_end - bpy.context.scene.frame_start + 1
 
-        # # Loop over frames and set keyframes for location
-        # for frame in range(frame_start, frame_end + 1):
-        #     # Set the current frame
+        # # Divide the frames into three segments
+        # segment_frames = total_frames // 3
+
+        # # Rotate around X-axis
+        # for frame in range(1, segment_frames + 1):
         #     bpy.context.scene.frame_set(frame)
-            
-        #     # Calculate the translation distance for this frame
-        #     distance = translation_distance * (frame - frame_start) / (frame_end - frame_start)
-            
-        #     # Set the bone's location (translating along the X-axis; adjust if needed)
-        #     bone.location = (distance, 0, 0)
-            
-        #     # Insert a keyframe for the bone's location
-        #     bone.keyframe_insert(data_path="location", index=-1)
-            
+        #     angle = frame * (2 * np.pi / segment_frames)  # Full rotation over segment
+        #     quat_x = Quaternion((np.cos(angle / 2), np.sin(angle / 2), 0, 0))  # X-axis rotation
+        #     bone.rotation_quaternion = quat_x
+        #     bone.keyframe_insert(data_path="rotation_quaternion", frame=frame)
+        #     print(f"Frame {frame}: Quaternion (X-axis) {quat_x}")
+
+        # # Rotate around Y-axis
+        # for frame in range(segment_frames + 1, 2 * segment_frames + 1):
+        #     bpy.context.scene.frame_set(frame)
+        #     angle = (frame - segment_frames) * (2 * np.pi / segment_frames)  # Full rotation over segment
+        #     quat_y = Quaternion((np.cos(angle / 2), 0, np.sin(angle / 2), 0))  # Y-axis rotation
+        #     bone.rotation_quaternion = quat_y
+        #     bone.keyframe_insert(data_path="rotation_quaternion", frame=frame)
+        #     print(f"Frame {frame}: Quaternion (Y-axis) {quat_y}")
+
+        # # Rotate around Z-axis
+        # for frame in range(2 * segment_frames + 1, total_frames + 1):
+        #     bpy.context.scene.frame_set(frame)
+        #     angle = (frame - 2 * segment_frames) * (2 * np.pi / segment_frames)  # Full rotation over segment
+        #     quat_z = Quaternion((np.cos(angle / 2), 0, 0, np.sin(angle / 2)))  # Z-axis rotation
+        #     bone.rotation_quaternion = quat_z
+        #     bone.keyframe_insert(data_path="rotation_quaternion", frame=frame)
+        #     print(f"Frame {frame}: Quaternion (Z-axis) {quat_z}")
+
         
         bpy.ops.export_scene.fbx(filepath=self.output_path)
 
 
 # Usage example
-fbx_file_path = "/home/umerkhan/Desktop/code/texel/Texel-Art-mocap/blender/Remy.fbx" # Hard coded path to the .fbx file
-fbx_output_path = "/home/umerkhan/Desktop/code/texel/Texel-Art-mocap/blender/RemyCompleted.fbx"
+fbx_file_path = "/home/personooo/Desktop/Code/Texel Art New/Texel-Art-mocap/blender/Remy.fbx" # Hard coded path to the .fbx file
+fbx_output_path = "/home/personooo/Desktop/Code/Texel Art New/Texel-Art-mocap/blender/RemyCompleted.fbx"
 animator = BlenderAnimator(fbx_file_path, fbx_output_path)
 animator.animate_skeleton()
