@@ -62,7 +62,8 @@ class Skeleton:
         
     def convert_coords(self, coords):
         x, y, z = coords
-        return (x, y, z)
+        return (x, z, -y)
+        return coords
         
     def compute_midpoint(self, point_a, point_b):
         return [(a + b) / 2 for a, b in zip(point_a, point_b)]
@@ -282,14 +283,16 @@ class Skeleton:
             
             # Add spheres for keypoints
             for keypoint, coords in self.frame_keypoints.items():
+                # print(coords)
                 x, y, _ = self.convert_coords(coords)
-                x = int(x * self.frame_width / 2 + self.frame_width / 2)
-                y = int(y * self.frame_height / 2 + self.frame_height / 2)
+                # print(x, y)
+                x = int(x * self.frame_width / 2) / 10
+                y = int(y * self.frame_height / 2) / 10
                 z = 0  # Since this is a 2D visualization, Z is set to 0
                 file.write(f"# Sphere for {keypoint}\n")
                 file.write("bpy.ops.mesh.primitive_uv_sphere_add(\n")
-                file.write(f"    radius=0.05,  # Adjust size of spheres\n")
-                file.write(f"    location=({x}, {y}, {z})\n")
+                file.write(f"    radius=0.15,  # Adjust size of spheres\n")
+                file.write(f"    location=({x}, {z}, {y})\n")
                 file.write(")\n")
                 file.write(f"bpy.context.object.name = '{keypoint}'\n\n")
             
@@ -300,10 +303,10 @@ class Skeleton:
                     child_coords = self.frame_keypoints[child]
                     x1, y1, _ = self.convert_coords(parent_coords)
                     x2, y2, _ = self.convert_coords(child_coords)
-                    x1 = int(x1 * self.frame_width / 2 + self.frame_width / 2)
-                    y1 = int(y1 * self.frame_height / 2 + self.frame_height / 2)
-                    x2 = int(x2 * self.frame_width / 2 + self.frame_width / 2)
-                    y2 = int(y2 * self.frame_height / 2 + self.frame_height / 2)
+                    x1 = int(x1 * self.frame_width / 2 ) / 10
+                    y1 = int(y1 * self.frame_height / 2 ) / 10
+                    x2 = int(x2 * self.frame_width / 2 ) / 10
+                    y2 = int(y2 * self.frame_height / 2 ) / 10
                     
                     file.write(f"# Line connecting {parent} to {child}\n")
                     file.write("curve = bpy.data.curves.new(type='CURVE', name='Line')\n")
