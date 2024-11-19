@@ -62,7 +62,7 @@ class Skeleton:
         
     def convert_coords(self, coords):
         x, y, z = coords
-        return (x, z, y)
+        return (x, z, -y)
         
     def compute_midpoint(self, point_a, point_b):
         return [(a + b) / 2 for a, b in zip(point_a, point_b)]
@@ -158,25 +158,25 @@ class Skeleton:
         return rotation_quat
     
     def create_skeleton_with_rotations(self):
-        positions = {'center_hip': (self.frame_width // 2, self.frame_height // 2)}
+        # positions = {'center_hip': (self.frame_width // 2, self.frame_height // 2, 0)}
+        positions = {'center_hip': (0, 0, 0)}
 
         for parent, children in self.bone_hierarchy.items():
             if parent in positions:
-                parent_pos = Vector((positions[parent][0], positions[parent][1], 0))
+                parent_pos = Vector((positions[parent][0], positions[parent][1], positions[parent][2]))
 
                 for child in children:
                     if (parent, child) in self.relative_vectors:
                         vector = self.relative_vectors[(parent, child)]
                         rotation_quat = self.compute_rotation_between_vectors((1, 0, 0), vector)
-                        # if parent == 'left_shoulder' and child == 'left_elbow':
-                        #     print(f"Rotation quaternion between {parent} and {child}: {rotation_quat}")
-                        # if parent == 'right_shoulder' and child == 'right_elbow':
-                        #     print(f"Rotation quaternion between {parent} and {child}: {rotation_quat}")
                         unit_vector = Vector((1, 0, 0))
                         rotated_vector = rotation_quat @ unit_vector
 
                         child_pos = parent_pos + rotated_vector * 100
-                        positions[child] = (int(child_pos.x), int(child_pos.y))
+                        positions[child] = (child_pos.x, child_pos.y, child_pos.z)
+
+        return positions
+
         
         # positions = {'left_shoulder': (self.frame_width // 2, self.frame_height // 2)}
         # for parent, children in self.bone_hierarchy.items():
@@ -221,10 +221,12 @@ class Skeleton:
                 self.compute_relative_vectors()
                 print(frame_count)
                 if(frame_count == 10):
-                    print("Exporting blue skeleton to Blender-compatible Python script...")
-                    self.export_blue_skeleton('blue_skeleton.py')
+                    # print("Exporting blue skeleton to Blender-compatible Python script...")
+                    # self.export_blue_skeleton('blue_skeleton.py')
+                    print("Exporting pink skeleton to Blender-compatible Python script...")
+                    self.export_pink_skeleton('pink_skeleton.py')
                     break
-                self.visualize_frame()
+                # self.visualize_frame()
                 # Example use of the formatted output for Blender
                 blender_data = self.format_for_blender()
                 self.frame_keypoints = {}
@@ -322,38 +324,30 @@ class Skeleton:
             print(f"Blender script for blue skeleton written to {output_path}")
 
     def export_pink_skeleton(self, output_path):
-        """
-        Exports the pink skeleton (rotation-only, 3D) as a Blender-compatible Python script.
-        """
         rotated_positions = self.create_skeleton_with_rotations()
 
         with open(output_path, 'w') as file:
             file.write("import bpy\n\n")
             file.write("# Create spheres and lines for pink skeleton in Blender\n")
             
-            # Add spheres for rotated positions
             for joint, coords in rotated_positions.items():
                 x, y, z = coords
-                # z = 0  # Assuming flat Z for now; adjust if needed for 3D
-                x = x / 10  # Adjust scaling factor as needed
-                y = y / 10
-                z = z / 10
+                x /= 10
+                y /= 10
+                z /= 10  # Scaled for Blender space
                 
                 file.write(f"# Sphere for {joint}\n")
                 file.write("bpy.ops.mesh.primitive_uv_sphere_add(\n")
-                file.write(f"    radius=0.15,  # Adjust size of spheres\n")
-                file.write(f"    location=({x}, {y}, {z})\n")
+                file.write(f"    radius=0.15, location=({x}, {y}, {z})\n")
                 file.write(")\n")
                 file.write(f"bpy.context.object.name = '{joint}'\n\n")
             
-            # Add lines for connections
             for parent, children in self.bone_hierarchy.items():
                 if parent in rotated_positions:
                     parent_x, parent_y, parent_z = rotated_positions[parent]
                     parent_x /= 10
                     parent_y /= 10
                     parent_z /= 10
-                    # parent_z = 0 / 10  # Adjust Z if needed
                     
                     for child in children:
                         if child in rotated_positions:
@@ -361,7 +355,6 @@ class Skeleton:
                             child_x /= 10
                             child_y /= 10
                             child_z /= 10
-                            # child_z = 0 / 10  # Adjust Z if needed
                             
                             file.write(f"# Line connecting {parent} to {child}\n")
                             file.write("curve = bpy.data.curves.new(type='CURVE', name='Line')\n")
@@ -373,7 +366,7 @@ class Skeleton:
                             file.write(f"curve_obj = bpy.data.objects.new(name='{parent}_to_{child}', object_data=curve)\n")
                             file.write("bpy.context.scene.collection.objects.link(curve_obj)\n\n")
 
-            print(f"Blender script for pink skeleton written to {output_path}")
+        print(f"Blender script for pink skeleton written to {output_path}")
 
 
 if __name__ == "__main__":
