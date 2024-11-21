@@ -324,17 +324,22 @@ class Skeleton:
             print(f"Blender script for blue skeleton written to {output_path}")
 
     def export_pink_skeleton(self, output_path):
+        """
+        Exports the pink skeleton (rotation-only, 3D) as a Blender-compatible Python script,
+        with points, lines, and an armature.
+        """
         rotated_positions = self.create_skeleton_with_rotations()
 
         with open(output_path, 'w') as file:
             file.write("import bpy\n\n")
-            file.write("# Create spheres and lines for pink skeleton in Blender\n")
+            file.write("# Create spheres, lines, and armature for pink skeleton in Blender\n")
             
+            # Add spheres for rotated positions
             for joint, coords in rotated_positions.items():
                 x, y, z = coords
                 x /= 10
                 y /= 10
-                z /= 10  # Scaled for Blender space
+                z /= 10
                 
                 file.write(f"# Sphere for {joint}\n")
                 file.write("bpy.ops.mesh.primitive_uv_sphere_add(\n")
@@ -342,6 +347,7 @@ class Skeleton:
                 file.write(")\n")
                 file.write(f"bpy.context.object.name = '{joint}'\n\n")
             
+            # Add lines for connections
             for parent, children in self.bone_hierarchy.items():
                 if parent in rotated_positions:
                     parent_x, parent_y, parent_z = rotated_positions[parent]
@@ -366,7 +372,34 @@ class Skeleton:
                             file.write(f"curve_obj = bpy.data.objects.new(name='{parent}_to_{child}', object_data=curve)\n")
                             file.write("bpy.context.scene.collection.objects.link(curve_obj)\n\n")
 
-        print(f"Blender script for pink skeleton written to {output_path}")
+            # Add armature and bones
+            file.write("# Create armature\n")
+            file.write("bpy.ops.object.armature_add(enter_editmode=True, location=(0, 0, 0))\n")
+            file.write("armature = bpy.context.object\n")
+            file.write("armature.name = 'PinkSkeletonArmature'\n\n")
+
+            for parent, children in self.bone_hierarchy.items():
+                if parent in rotated_positions:
+                    parent_x, parent_y, parent_z = rotated_positions[parent]
+                    parent_x /= 10
+                    parent_y /= 10
+                    parent_z /= 10
+                    
+                    for child in children:
+                        if child in rotated_positions:
+                            child_x, child_y, child_z = rotated_positions[child]
+                            child_x /= 10
+                            child_y /= 10
+                            child_z /= 10
+
+                            file.write(f"# Bone from {parent} to {child}\n")
+                            file.write(f"bone = armature.data.edit_bones.new(name=f'{parent}_to_{child}')\n")
+                            file.write(f"bone.head = ({parent_x}, {parent_y}, {parent_z})\n")
+                            file.write(f"bone.tail = ({child_x}, {child_y}, {child_z})\n\n")
+
+            file.write("bpy.ops.object.mode_set(mode='OBJECT')\n\n")
+
+
 
 
 if __name__ == "__main__":
