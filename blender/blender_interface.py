@@ -1,6 +1,7 @@
 import bpy
 import numpy as np
-from mathutils import Vector, Quaternion
+import math as m
+import Quaternion
 
 class Skeleton:
     def __init__(self):
@@ -140,9 +141,12 @@ class Skeleton:
                         self.relative_vectors[(parent, child)] = vector
         
     def compute_rotation_between_vectors(self, rest_vector, target_vector):
-        rest_vec = Vector(rest_vector).normalized()
-        target_vec = Vector(target_vector).normalized()
-        rotation_quat = rest_vec.rotation_difference(target_vec)
+        
+        rest_vec = rest_vector / (np.linalg.norm(rest_vector))
+        target_vec = target_vector / (np.linalg.norm(target_vector))
+        cross = np.cross(rest_vec, target_vec)
+        angle = m.acos(np.dot(rest_vec, target_vec))
+        rotation_quat = Quaternion.from_rotation_vector(cross, angle, np.pi/2)
         return rotation_quat
     
     def create_skeleton_with_rotations(self):
@@ -150,15 +154,24 @@ class Skeleton:
 
         for parent, children in self.bone_hierarchy.items():
             if parent in positions:
-                parent_pos = Vector((positions[parent][0], positions[parent][1], 0))
+                parent_pos = np.array(positions[parent][0], positions[parent][1], 0)
 
                 for child in children:
                     if (parent, child) in self.relative_vectors:
                         vector = self.relative_vectors[(parent, child)]
                         rotation_quat = self.compute_rotation_between_vectors((1, 0, 0), vector)
 
-                        unit_vector = Vector((1, 0, 0))
-                        rotated_vector = rotation_quat @ unit_vector
+                        unit_vector = np.array(1, 0, 0)
+                        
+
+                        # Convert the unit vector to a pure quaternion
+                        unit_quat = Quaternion.quaternion(0, *unit_vector)
+
+                        # Rotate the vector using quaternion multiplication
+                        rotated_quat = rotation_quat * unit_quat * rotation_quat.conjugate()
+
+                        # Extract the rotated vector
+                        rotated_vector = np.array([rotated_quat.x, rotated_quat.y, rotated_quat.z])
 
                         child_pos = parent_pos + rotated_vector * 100
                         positions[child] = (int(child_pos.x), int(child_pos.y))
@@ -169,7 +182,7 @@ class Skeleton:
         formatted_data = []
         for (parent, child), vector in self.relative_vectors.items():
             if parent in self.frame_keypoints and child in self.frame_keypoints:
-                rest_vector = (0, 0, -1)  # Assuming rest pose is along the y-axis
+                rest_vector = np.array(0, 0, -1)  # Assuming rest pose is along the y-axis
                 # rest_vector = (1, 0, 0)  # Assuming rest pose is along the x-axis
                 rotation_quat = self.compute_rotation_between_vectors(rest_vector, vector)
                 # if parent == 'left_shoulder' and child == 'left_elbow':
@@ -223,10 +236,9 @@ class BlenderAnimator:
         Apply a global rotation to a bone by converting it to local space.
         """
         # Convert global quaternion to local space
+        armature_quat = Quaternion(armature.matrix_world)
         bone_quat_local = (
-            armature.matrix_world.to_quaternion().inverted() 
-            @ global_quat 
-            @ armature.matrix_world.to_quaternion()
+            armature_quat.inverse() * global_quat * armature_quat 
         )
         
         # Apply the local quaternion to the bone
@@ -314,7 +326,7 @@ class BlenderAnimator:
 
 
 # Usage example
-fbx_file_path = "/home/personooo/Desktop/Code/Texel Art New/Texel-Art-mocap/blender/Remy.fbx" # Hard coded path to the .fbx file
-fbx_output_path = "/home/personooo/Desktop/Code/Texel Art New/Texel-Art-mocap/blender/RemyCompleted.fbx"
+fbx_file_path = r"C:\Users\neelp\Texel-Art-mocap\blender\Remy.fbx" # Hard coded path to the .fbx file
+fbx_output_path = r"C:\Users\neelp\Texel-Art-mocap\blender\RemyCompleted.fbx"
 animator = BlenderAnimator(fbx_file_path, fbx_output_path)
 animator.animate_skeleton()
