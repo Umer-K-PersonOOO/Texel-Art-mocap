@@ -50,8 +50,8 @@ class Skeleton:
         
     def convert_coords(self, coords):
         x, y, z = coords
-        return (x, -z, y)
         return (x, y, z)
+        return (x, -z, y)
         
     def compute_midpoint(self, point_a, point_b):
         return [(a + b) / 2 for a, b in zip(point_a, point_b)]
@@ -190,6 +190,10 @@ class Skeleton:
                 # if parent == 'right_shoulder' and child == 'right_elbow':
                 #     print(f"Rotation quaternion between {parent} and {child}: {rotation_quat}")
                 bone_name = self.bone_mapping.get(child, child)
+                if bone_name == "mixamorig:Hips":
+                    rotation_quat = Quaternion((rotation_quat.w, rotation_quat.x, rotation_quat.y, rotation_quat.z))
+                    print()
+                    rotation_quat = rotation_quat @ Quaternion((0.7071, 0.7071, 0, 0))
                 formatted_data.append({
                     'bone_name': bone_name,
                     'rotation': (rotation_quat.w, rotation_quat.x, rotation_quat.y, rotation_quat.z)
