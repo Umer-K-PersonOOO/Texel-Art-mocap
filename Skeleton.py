@@ -62,7 +62,7 @@ class Skeleton:
         
     def convert_coords(self, coords):
         x, y, z = coords
-        return (x, y, z)
+        return (x, y, 0)
         
     def compute_midpoint(self, point_a, point_b):
         return [(a + b) / 2 for a, b in zip(point_a, point_b)]
@@ -155,6 +155,7 @@ class Skeleton:
         rest_vec = Vector(rest_vector).normalized()
         target_vec = Vector(target_vector).normalized()
         rotation_quat = rest_vec.rotation_difference(target_vec)
+        rotation_quat = Quaternion((rotation_quat[0], rotation_quat[1], rotation_quat[3], -rotation_quat[2]))
         return rotation_quat
     
     def create_skeleton_with_rotations(self):

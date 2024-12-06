@@ -6,6 +6,7 @@ import numpy as np
 mp_drawing = mp.solutions.drawing_utils
 mp_pose = mp.solutions.pose
 mp_hands = mp.solutions.hands
+mp_holistic = mp.solutions.holistic
 
 
 
@@ -17,7 +18,8 @@ output_file = open('body_coordinates.txt', 'w')
 
 # Initialize both pose and hands detection modules
 with mp_pose.Pose(min_detection_confidence=0.8, min_tracking_confidence=0.8) as pose, \
-     mp_hands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5) as hands:
+     mp_hands.Hands(min_detection_confidence=0.5, min_tracking_confidence=0.5) as hands, \
+     mp_holistic.Holistic(smooth_landmarks=True) as holistic:
 
     while cap.isOpened():
         ret, frame = cap.read()
